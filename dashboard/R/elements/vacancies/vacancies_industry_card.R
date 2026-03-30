@@ -264,7 +264,7 @@ get_vacancies_industry_tbl <- function() {
   base <- dplyr::tbl(APP_DB$pool,
                      dbplyr::in_schema("ons", "labour_market__vacancies_industry"))
 
-  period_sql <- .date_sql_for("MMM YY (p)", "time_period")
+  period_sql <- .date_sql_for("MMM-MMM YYYY", "time_period")
 
   base %>%
     dplyr::mutate(time_period = !!period_sql) %>%

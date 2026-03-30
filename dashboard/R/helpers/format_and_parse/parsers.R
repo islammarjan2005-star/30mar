@@ -41,14 +41,25 @@
   ", col_name))
 }
 
+# Monthly "MMM YY" with provisional marker stripped: "Jun 24 (p)" -> "Jun 24"
+.sql_parse_month_yy_provisional <- function(col_name) {
+  dbplyr::sql(sprintf("
+    to_date(
+      initcap(btrim(regexp_replace(%s::text, '\\s*\\(p\\)\\s*$', '', 'i'))),
+      'Mon YY'
+    )::date
+  ", col_name))
+}
+
 # Router by descriptive parse_mode
 .date_sql_for <- function(parse_mode, col_name) {
-  parse_mode <- match.arg(parse_mode, c("none", "MMM-MMM YYYY", "MMM YYYY", "MMM YY"))
+  parse_mode <- match.arg(parse_mode, c("none", "MMM-MMM YYYY", "MMM YYYY", "MMM YY", "MMM YY (p)"))
   switch(
     parse_mode,
     "none"         = NULL,
     "MMM-MMM YYYY" = .sql_parse_quarter_range(col_name),
     "MMM YYYY"     = .sql_parse_month_yyyy_cast(col_name),
-    "MMM YY"       = .sql_parse_month_yy(col_name)
+    "MMM YY"       = .sql_parse_month_yy(col_name),
+    "MMM YY (p)"   = .sql_parse_month_yy_provisional(col_name)
   )
 }
