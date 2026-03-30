@@ -165,7 +165,7 @@ vacancies_industry_server <- function(id, conn = APP_DB$pool) {
     output$vac_table <- reactable::renderReactable({
       df <- industry_df(); req(nrow(df) > 0)
       reactable::reactable(
-        df %>% dplyr::select(industry, sic_section, time_period, value) %>%
+        df %>% dplyr::select(business_metric, sic_section, time_period, value) %>%
                dplyr::mutate(value = round(value, 1)),
         sortable   = TRUE,
         filterable = TRUE,
@@ -220,7 +220,7 @@ vacancies_industry_server <- function(id, conn = APP_DB$pool) {
       plotly::plot_ly(
         data       = df,
         type       = "treemap",
-        labels     = ~industry,
+        labels     = ~business_metric,
         parents    = ~"",
         values     = ~value,
         textinfo   = textinfo_val,
@@ -270,8 +270,9 @@ get_vacancies_industry_tbl <- function() {
     dplyr::mutate(time_period = !!period_sql) %>%
     dplyr::select(
       time_period,
-      industry,
+      business_metric,
       sic_section,
+      dataset_identifier_code,
       value
     )
 }
