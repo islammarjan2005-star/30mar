@@ -1,0 +1,48 @@
+stages:
+  - pre
+  - build_image
+  - build_and_copy_package
+  - clean
+
+job_prep:
+  when: manual
+  stage: pre
+  variables:
+    GIT_STRATEGY: none
+  script:
+    |
+    echo "Setting up"
+    rm -rf **
+    whoami
+    ls -alt
+    aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 165562107270.dkr.ecr.eu-west-2.amazonaws.com
+
+job_build_image:
+  when: manual
+  stage: build_image
+  variables:
+    GIT_STRATEGY: clone
+  script:
+    |
+    echo "Building the project"
+    docker build . -t build_package
+
+job_build_and_copy_package:
+  when: manual
+  stage: build_and_copy_package
+  variables:
+    GIT_STRATEGY: clone
+  script:
+    |
+    echo "Building the package and pushing to repository"
+    docker run --rm -t build_package /bin/bash -c "R CMD build dbtplotr && ls && Rscript -e 'aws.s3::put_object(file = \"dbtplotr_0.0.3.0.tar.gz\", bucket = \"jupyter.notebook.uktrade.io\", object = \"shared/ag_packages/cran/dbtplotr/dbtplotr_0.0.3.0.tar.gz\")'"
+
+
+job_clean:
+  when: manual
+  stage: clean
+  variables:
+    GIT_STRATEGY: none
+  script:
+    echo "Cleaning up"
+    rm -rf **

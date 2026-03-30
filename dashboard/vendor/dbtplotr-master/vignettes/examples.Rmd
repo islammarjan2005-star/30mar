@@ -1,0 +1,242 @@
+---
+title: "Examples using DBTPlotR and ggplot2"
+output: html_document
+date: "2025-07-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+This document demonstrates example usage of [`DBTPlotR`](https://gitlab.data.trade.gov.uk/dbt-data-visualisation-library/dbtplotr), and some fundamental principles of `ggplot2`. Details on the package can be found on the [package README](https://gitlab.data.trade.gov.uk/dbt-data-visualisation-library/dbtplotr#dbtplotr).
+
+Start by installing the `ggplot2` and `dbtplotr` packages. As `dbtplotr` is an internal package, we install it using the `devtools` package. We also install `DBI` to connect to datasets on Data Workspace, and`dplyr` to manipulate this data.
+
+```{r, echo = T, results = 'hide', message=FALSE, warning = FALSE}
+
+req <- c("ggplot2", "DBI", "dplyr")
+to_install <- req[!(req %in% installed.packages()[,"Package"])]
+if(length(to_install)) install.packages(to_install)
+
+devtools::install_git("git@gitlab.data.trade.gov.uk:dbt-data-visualisation-library/dbtplotr.git", upgrade = 'never')
+
+library(DBI)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(dbtplotr)
+```
+
+Load in a dummy dataset...
+
+```{r,  echo = T, results = 'hide', results = 'hide', message=FALSE, warning = FALSE}
+
+conn <- DBI::dbConnect(RPostgres::Postgres())
+
+## ONS UK Total Trade
+ons_trade <- dbGetQuery(conn,'SELECT * FROM ons.trade__uk_totals_sa;')
+
+ons_trade_sk <- ons_trade %>%
+  filter(period_type == 'year', ons_region_name == 'South Korea', period >= '2010', product_name == 'goods')
+ons_trade_imports <- ons_trade %>%
+  filter(period %in% c('2022'), product_name == 'goods', direction== 'imports', value > 100,
+         ons_region_name %in% c('Bangladesh', 'Poland','Brazil','Australia','Mexico','India'))
+
+```
+
+### Example line chart
+
+Let's create a simple ggplot...
+
+```{r}
+
+ggplot(data = ons_trade_sk, 
+       aes(x = period, y = value, group = direction)) +
+  geom_line(aes(color = direction)) +
+  labs(title = "UK Trade with South Korea, 2010-2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       x = "",
+       y = "Value, £m",
+       color = "Direction") 
+
+```
+
+
+Layer on the DBT theme using `+ theme_dbt()` and DBT colours using `+ colours_dbt()`. Here we set `palette = 'dbt2'` to use the DBT analysis function's core 2 colours. See the full list of colour palettes [on the DBTPlotR ReadMe here](https://gitlab.data.trade.gov.uk/dbt-data-visualisation-library/dbtplotr#colour-palettes). 
+
+```{r}
+
+ggplot(data = ons_trade_sk, 
+       aes(x = period, y = value, group = direction)) +
+  geom_line(aes(color = direction)) +
+  labs(title = "UK Trade with South Korea, 2010-2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       x = "",
+       y = "Value, £m",
+       color = "Direction") +
+  theme_dbt() +
+  colours_dbt(type = 'line', palette = 'dbt2')
+
+```
+
+
+Here is an example of layering on multiple geometries, `geom_line()` and `geom_point()`. Note that variables are mapped to aesthetics within `aes()` i.e. `geom_line(aes(color = direction))`, while fixed aesthetics are set outside i.e. `geom_point(color = 'blue')`.
+
+```{r}
+
+ggplot(data = ons_trade_sk, 
+       aes(x = period, y = value, group = direction)) +
+  geom_line(aes(color = direction)) +
+  geom_point(color = "#12436D") +
+  labs(title = "UK Trade with South Korea, 2010-2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       x = "",
+       y = "Value, £m",
+       color = "Direction") +
+  theme_dbt() +
+  colours_dbt(type = 'line', palette = 'dbt2')
+
+```
+
+### Example bar chart
+
+Note we use `geom_bar(stat = 'identity')` to indicate that y-values (value of imports) are already aggregated and ready to plot. If, instead, we wished to plot the number of imports, and the dataframe consisted of multiple rows for each x-value (country), we would apply a statistical transformation `geom_bar(stat = 'count')` to tell `ggplot2` to count the cases for each country before plotting. 
+
+```{r}
+ggplot(data = ons_trade_imports, 
+       aes(x = ons_region_name, y = value)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(title = "UK Imports from selected countries, 2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       x = "",
+       y = "Value, £m") +
+  theme_dbt(gridline = 'x') 
+
+```
+
+
+We can customise our plot further by adding a scale layer. Here we format the numbers on the x-axis to look tidier, using `label = scales::comma()`. We add more frequent breaks using `breaks = seq(0, 150000, 2500)`, and extend the plot axes using `limits = c(0, 15000)`.
+
+```{r}
+
+ggplot(data = ons_trade_imports, 
+       aes(x = value, y = ons_region_name)) +
+  geom_bar(stat = 'identity') +
+  labs(title = "UK Imports from selected countries, 2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       y = "",
+       x = "Value, £m") +
+  theme_dbt(gridline = 'x', legend = 'none') +
+  scale_x_continuous(label = scales::comma,
+                     limits = c(0, 15000),
+                     breaks=seq(0,15000,2500)) 
+  
+
+  
+
+```
+
+Switch between colour palettes by adjusting `colours_dbt()`. For example, here we emphasise a specific series (Brazil) by updating the aesthetics and using the two-colour DBT palette! Remove unnecessary legends and display only x-axis gridlines using `theme_dbt(gridline = 'x', legend='none')`.
+
+
+```{r}
+
+ons_trade_imports %>% 
+  mutate(highlight = ifelse(ons_region_name == "Brazil", 1, 0)) %>%
+  ggplot(aes(x = value, y = ons_region_name, fill = factor(highlight))) +
+  geom_bar(stat = 'identity') +
+  labs(title = "UK Imports from selected countries, 2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       y = "",
+       x = "Value, £m") +
+  theme_dbt(gridline = 'x', legend = 'none') +
+  scale_x_continuous(label = scales::comma,
+                     limits = c(0, 15000),
+                     breaks=seq(0,15000,2500)) +
+  colours_dbt(type = 'bar', palette = 'dbt2') 
+  
+
+```
+Alternatively, we could use core DBT blue with muted berry - 
+
+```{r}
+
+ons_trade_imports %>% 
+  mutate(highlight = ifelse(ons_region_name == "Brazil", 1, 0)) %>%
+  ggplot(aes(x = value, y = ons_region_name, fill = factor(highlight))) +
+  geom_bar(stat = 'identity') +
+  labs(title = "UK Imports from selected countries, 2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       y = "",
+       x = "Value, £m") +
+  theme_dbt(gridline = 'x', legend = 'none') +
+  scale_x_continuous(label = scales::comma,
+                     limits = c(0, 15000),
+                     breaks=seq(0,15000,2500)) +
+  colours_dbt(type = 'bar', palette = 'dbt2', option = "blue_berry1")
+  
+
+```
+
+Finally, we can create facet plots using `facet_wrap()`...
+
+```{r, fig.width=8, fig.height=4}
+
+# Tidy values for plotting
+ons_trade_sk["direction"][ons_trade_sk["direction"] == "exports"] <- "Exports"
+ons_trade_sk["direction"][ons_trade_sk["direction"] == "imports"] <- "Imports"
+
+ons_trade_sk %>% 
+  mutate(period = as.numeric(period)) %>%
+  ggplot(aes(x = period, y = value, group = 1)) +
+  geom_line() +
+  labs(title = "UK Imports from selected countries, 2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       x = "",
+       y = "Value, £m") +
+  theme_dbt(gridline = 'x', legend = 'none') +
+  scale_y_continuous(label = scales::comma) +
+  scale_x_continuous(breaks=seq(2010,2023,2)) +
+  facet_wrap(~direction, scales = "free_y") 
+  
+
+```
+
+
+... and `facet_grid()`
+
+
+```{r, fig.width=12, fig.height=7}
+
+ons_trade_two_countries <- ons_trade %>%
+  filter(period_type == 'year', ons_region_name == 'South Korea' | ons_region_name == 'Mexico', 
+         period >= '2010', product_name == 'goods')
+
+# Tidy values for plotting
+ons_trade_two_countries["direction"][ons_trade_two_countries["direction"] == "exports"] <- "Exports"
+ons_trade_two_countries["direction"][ons_trade_two_countries["direction"] == "imports"] <- "Imports"
+
+ons_trade_two_countries %>% 
+  mutate(period = as.numeric(period)) %>%
+  ggplot(aes(x = period, y = value, group = 1)) +
+  geom_line() +
+  labs(title = "UK Imports from selected countries, 2022",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       caption = "Source: ONS",
+       x = "",
+       y = "Value, £m") +
+  theme_dbt(gridline = 'x', legend = 'none') +
+  scale_y_continuous(label = scales::comma) +
+  scale_x_continuous(breaks=seq(2010,2023,2)) +
+  facet_grid(ons_region_name ~ direction, scales = "free_y") 
+  
+
+```

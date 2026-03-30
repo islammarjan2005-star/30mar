@@ -1,0 +1,141 @@
+---
+title: "Examples using chart helper functions"
+output: html_document
+date: "2025-07-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document demonstrates example usage of `linechart` and `barchart` functions from `DBTPlotR`. These are designed for easy and quick to use, and require little knowledge of `ggplot2`.
+
+Start by installing the `ggplot2` and `dbtplotr` packages. As `dbtplotr` is an internal package, we install it using the `devtools` package. We also install `DBI` to connect to datasets on Data Workspace, and`dplyr` to manipulate this data.
+
+```{r, echo = T, results = 'hide', message=FALSE, warning = FALSE}
+
+req <- c("ggplot2", "DBI", "dplyr", "scales", "plotly")
+to_install <- req[!(req %in% installed.packages()[,"Package"])]
+if(length(to_install)) install.packages(to_install)
+
+devtools::install_git("git@gitlab.data.trade.gov.uk:dbt-data-visualisation-library/dbtplotr.git", upgrade = 'never')
+
+
+library(ggplot2); library(dbtplotr); library(dplyr); library(lubridate); library(DBI)
+```
+
+Load in a dummy dataset...
+
+```{r,  echo = T, results = 'hide', results = 'hide', message=FALSE, warning = FALSE}
+
+conn <- DBI::dbConnect(RPostgres::Postgres())
+
+
+res <- dbGetQuery(conn, "SELECT country, year_2000, year_2001, year_2002, year_2003, year_2004 
+                     FROM \"imf\".\"world_economic_outlook__by_country\" 
+                     where weo_subject_code = 'NGDPDPC' 
+                     and country in ('United Kingdom', 'United States','France','Germany')")
+
+data <- 
+  res %>% 
+  reshape2::melt() %>% 
+  mutate(year_of_calculation= gsub('year_', '',variable)) %>% 
+  select(country, year_of_calculation, value) %>%
+  mutate(year_of_calculation = as.Date(year_of_calculation, format = '%Y')) %>%
+  mutate(year_of_calculation = floor_date(year_of_calculation, 'year'))
+
+```
+
+### Example line chart
+
+Let's create a simple linechart to compare countries over time using the `linechart` function from `dbtplotr`. 
+
+```{r}
+
+linechart(data, 
+          x_axis= 'year_of_calculation',
+          y_axis = 'value', 
+          group = 'country')
+
+```
+
+Add titles, subtitles, and customise axes labels using `+ labs()`. Axes titles can be removed within `+ theme()` using `element_blank()`. 
+
+```{r}
+
+linechart(data, 
+          x_axis= 'year_of_calculation',
+          y_axis = 'value', 
+          group = 'country') +
+  labs(title = "GDP per capita, current prices, 2000 to 2004",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       y = "US $ per person") +
+  theme(axis.title.x = element_blank())
+
+```
+
+The default colour palette used by DBTPlotR chart functions is the ONS analysis community colours, `gaf`. To select another colour palette, use `+ colours_dbt()` specifying your chart type and chosen palette. See the full list of palettes available through DBTPlotR [here](https://gitlab.data.trade.gov.uk/dbt-data-visualisation-library/dbtplotr#colour-palettes).
+
+```{r, warning=FALSE, message=FALSE}
+
+linechart(data, 
+          x_axis= 'year_of_calculation',
+          y_axis = 'value', 
+          group = 'country') +
+  labs(title = "GDP per capita, current prices, 2000 to 2004",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       y = "US $ per person") +
+  theme(axis.title.x = element_blank()) +
+  colours_dbt(type = 'line', palette = 'reds')
+  
+
+```
+
+
+To create a barchart, use the `barchart` function from `dbtplotr`.
+
+```{r}
+
+barchart(data,
+         x_axis = 'year_of_calculation',
+         y_axis = 'value',
+         group = 'country') +
+  labs(title = "GDP per capita, current prices, 2000 to 2004",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       y = "US $ per person") +
+  theme(axis.title.x = element_blank())
+
+```
+
+
+
+
+```{r}
+barchart(data %>% filter(country == 'France'),
+         x_axis = 'year_of_calculation',
+         y_axis = 'value')  +
+  labs(title = "France GDP per capita in current prices, 2000 to 2004",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       y = "US $ per person") +
+  theme(axis.title.x = element_blank())
+
+```
+
+### Example bar chart
+
+Switch the x- and y- axes by setting `flip = TRUE`.
+
+```{r}
+barchart(data %>% filter(year_of_calculation == '2004-01-01'),
+         x_axis = 'country',
+         y_axis = 'value',
+         flip = T)  +
+  labs(title = "France GDP per capita in current prices, 2000 to 2004",
+       subtitle = "Ipsum Lorem dolor sit amet",
+       y = "US $ per person") +
+  theme(axis.title.y = element_blank())
+
+```
+
+
+

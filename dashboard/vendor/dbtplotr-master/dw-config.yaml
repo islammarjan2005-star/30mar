@@ -1,0 +1,15 @@
+# Declare all data in this repository below. For more information visit: 
+# https://data-services-help.trade.gov.uk/data-in-gitlab
+data:
+  - path: man/figures/default_plotly.png
+    type: open-reference-data
+  - path: man/figures/with_dbtplotr_colour.png
+    type: open-reference-data
+  - path: man/figures/with_dbtplotr_DBT_colour.png
+    type: open-reference-data
+  - path: man/figures/with_dbtplotr.png
+    type: open-reference-data
+  - path: man/figures/without_dbtplotr.png
+    type: open-reference-data
+  - path: man/figures/with_theme_dbt_plotly.png
+    type: open-reference-data
