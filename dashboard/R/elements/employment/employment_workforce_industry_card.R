@@ -12,11 +12,11 @@ employment_workforce_industry_ui <- function(id) {
       uiOutput(ns("card_total_services"))
     ),
 
-    # --- Treemap: individual industry breakdown  ---
+    # --- Industry breakdown card  ---
     mod_govuk_data_vis_card_ui(
       id = ns("workforce_industry_card"),
       title = "Workforce Jobs by Industry",
-      help_text = "Workforce jobs by individual industry section (SIC 2007). Aggregate totals (All jobs, Total services) are shown above. Each block is sized by number of jobs at the latest available snapshot.",
+      help_text = "Workforce jobs by SIC section. Treemap shows a snapshot of the latest period in the selected range; line/area/bar modes show trends across all periods in range, grouped by SIC section. Aggregate totals (A-T, G-T) are excluded from the chart and shown above as stat cards.",
       help_text_source = "Source: ONS - Labour market statistics, workforce jobs by industry",
       help_link = "https://data.trade.gov.uk/datasets/4609dc12-0dfa-4734-8ecb-6c50b59d163d",
       help_link_text = "ONS Labour Market Overview",
@@ -25,31 +25,75 @@ employment_workforce_industry_ui <- function(id) {
       query = ns("sql_query"),
 
       controls = list(
+        shinyWidgets::radioGroupButtons(
+          inputId = ns("chart_type"),
+          label   = "Choose a graph :",
+          choiceNames = list(
+            tags$span(`data-toggle`="tooltip", title = "Treemap (snapshot)", tags$i(class = "fa fa-th-large")),
+            tags$span(`data-toggle`="tooltip", title = "Stacked Bar Chart", tags$i(class = "fa fa-bar-chart")),
+            tags$span(`data-toggle`="tooltip", title = "Line Chart",        tags$i(class = "fa fa-line-chart")),
+            tags$span(`data-toggle`="tooltip", title = "Area Chart",        tags$i(class = "fa fa-area-chart"))
+          ),
+          choiceValues = c("treemap","stacked_bar","line","stacked_area"),
+          justified = TRUE,
+          size = "sm",
+          status = "danger"
+        ),
         mod_quick_date_range_ui(
           id            = ns("wf_dates"),
-          label_quick   = "Snapshot period",
+          label_quick   = "Date range",
           label_picker  = "Time period",
           custom_picker = "slider",
-          presets       = c("custom", "latest", "past_year", "3y", "5y", "none")
+          presets       = c("custom", "ytd", "past_year", "3y", "5y", "none")
+        ),
+        mod_filter_picker_ui(
+          id = ns("sic_filter"),
+          label = "Industry section filter",
+          multiple = TRUE,
+          actions_box = TRUE,
+          live_search = TRUE,
+          virtual_scroll = 10,
+          selected_text_format = "count > 2"
         )
       ),
 
       accordion_controls = list(
-        shinyWidgets::radioGroupButtons(
-          inputId     = ns("colour_by"),
-          label       = "Colour scheme",
-          choices     = c("Industry section" = "sic_section", "Value (sequential)" = "value"),
-          justified   = TRUE,
-          size        = "sm",
-          status      = "danger"
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'treemap'", ns("chart_type")),
+          shinyWidgets::radioGroupButtons(
+            inputId     = ns("colour_by"),
+            label       = "Colour scheme",
+            choices     = c("Industry section" = "sic_section", "Value (sequential)" = "value"),
+            justified   = TRUE,
+            size        = "sm",
+            status      = "danger"
+          ),
+          shinyWidgets::radioGroupButtons(
+            inputId      = ns("label_mode"),
+            label        = "Block labels",
+            choices      = c("Industry + value" = "both", "Industry only" = "label", "Value only" = "value"),
+            justified    = TRUE,
+            size         = "sm",
+            status       = "danger"
+          )
         ),
-        shinyWidgets::radioGroupButtons(
-          inputId      = ns("label_mode"),
-          label        = "Block labels",
-          choices      = c("Industry + value" = "both", "Industry only" = "label", "Value only" = "value"),
-          justified    = TRUE,
-          size         = "sm",
-          status       = "danger"
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'stacked_bar'", ns("chart_type")),
+          shinyWidgets::sliderTextInput(
+            inputId = ns("stack_mode"),
+            label = "Time Interval between bars",
+            choices = c("monthly","quarterly","annually","5year","decade"),
+            selected = "annually",
+            grid = TRUE
+          )
+        ),
+        mod_annotation_line_ui(ns("date_lines"),
+          type = "date", title = "Add key dates",
+          add_label = "Add key date", show_delete = TRUE, auto_mask_date = TRUE
+        ),
+        mod_annotation_line_ui(ns("value_lines"),
+          type = "value", title = "Add key values",
+          add_label = "Add key values", show_delete = TRUE, auto_mask_date = TRUE
         )
       )
     )
@@ -60,26 +104,42 @@ employment_workforce_industry_ui <- function(id) {
 employment_workforce_industry_server <- function(id, conn = APP_DB$pool) {
   moduleServer(id, function(input, output, session) {
 
+    AGG_CODES <- c("A-T", "G-T")
+
+    shinyWidgets::updateRadioGroupButtons(session, "chart_type", selected = "treemap")
     shinyWidgets::updateRadioGroupButtons(session, "colour_by",  selected = "sic_section")
     shinyWidgets::updateRadioGroupButtons(session, "label_mode", selected = "both")
+    date_lines  <- mod_annotation_line_server("date_lines",  type = "date")
+    value_lines <- mod_annotation_line_server("value_lines", type = "value")
 
     # Base cleaned lazy tbl — cached (no filter inputs needed for the base)
     cleaned_full_tbl <- reactive({
       get_workforce_jobs_tbl()
     }) %>% bindCache("workforce_industry")   # static key: schema/table never changes
 
-    # Date range module (drives the snapshot picker)
+    # Picker is fed only non-aggregate sections
+    sic_picker_tbl <- reactive({
+      cleaned_full_tbl() %>%
+        dplyr::filter(!sic_section %in% !!AGG_CODES)
+    })
+    sic_pick <- mod_filter_picker_server(
+      id       = "sic_filter",
+      data_tbl = sic_picker_tbl,
+      column   = "sic_section"
+    )
+
+    # Date range module
     dates <- mod_quick_date_range_server(
       id                 = "wf_dates",
       data_tbl           = cleaned_full_tbl,
-      presets            = c("custom", "latest", "past_year", "3y", "5y", "none"),
-      default            = "latest",
+      presets            = c("custom", "ytd", "past_year", "3y", "5y", "none"),
+      default            = "5y",
       frequency          = "monthly",
       custom_picker      = "slider",
       preserve_selection = TRUE
     )
 
-    # Filtered data — collect once, then we take the latest period within range for the chart
+    # Date-filtered collected data (still includes aggregates so stat cards work)
     dat <- reactive({
       dr        <- dates$date_range()
       date_from <- if (!is.null(dr) && length(dr) == 2) as.Date(dr[[1]]) else NULL
@@ -98,7 +158,7 @@ employment_workforce_industry_server <- function(id, conn = APP_DB$pool) {
       )
     })
 
-    # Snapshot: always the LATEST time_period within the filtered range
+    # Snapshot: latest time_period within filtered range (drives stat cards)
     snapshot_df <- reactive({
       df <- dat()$data
       req(nrow(df) > 0)
@@ -108,15 +168,29 @@ employment_workforce_industry_server <- function(id, conn = APP_DB$pool) {
         dplyr::filter(!is.na(value), value > 0)
     })
 
-
     aggregates_df <- reactive({
       snapshot_df() %>%
-        dplyr::filter(sic_section %in% c("A-T", "G-T"))
+        dplyr::filter(sic_section %in% !!AGG_CODES)
     })
 
+    # Time series of non-aggregate sections, with optional SIC picker filter
+    filtered_long_df <- reactive({
+      df <- dat()$data
+      req(nrow(df) > 0)
+      sel <- sic_pick$selected()
+      df <- df %>%
+        dplyr::filter(!sic_section %in% !!AGG_CODES) %>%
+        dplyr::filter(!is.na(value), value > 0)
+      if (length(sel) > 0) df <- df %>% dplyr::filter(sic_section %in% !!sel)
+      df
+    })
+
+    # Treemap snapshot (latest period of filtered_long_df)
     industry_df <- reactive({
-      snapshot_df() %>%
-        dplyr::filter(!sic_section %in% c("A-T", "G-T")) %>%
+      df <- filtered_long_df(); req(nrow(df) > 0)
+      latest_period <- max(df$time_period, na.rm = TRUE)
+      df %>%
+        dplyr::filter(time_period == latest_period) %>%
         dplyr::arrange(dplyr::desc(value))
     })
 
@@ -180,79 +254,98 @@ employment_workforce_industry_server <- function(id, conn = APP_DB$pool) {
     })
 
     output$wf_plot <- plotly::renderPlotly({
-      df       <- industry_df(); req(nrow(df) > 0)
-      snap_lbl <- format(max(df$time_period, na.rm = TRUE), "%b %Y")
+      ct <- input$chart_type %||% "treemap"
 
-      # Build text info for each block label mode
-      textinfo_map <- c(
-        both  = "label+value+percent parent",
-        label = "label",
-        value = "value+percent parent"
-      )
-      textinfo_val <- textinfo_map[[ input$label_mode %||% "both" ]]
+      if (ct == "treemap") {
+        df       <- industry_df(); req(nrow(df) > 0)
+        snap_lbl <- format(max(df$time_period, na.rm = TRUE), "%b %Y")
 
-      # --- Colour by SIC section (categorical) or by value (sequential) ---
-      colour_by <- input$colour_by %||% "sic_section"
-
-      if (colour_by == "sic_section") {
-        sic_levels <- unique(df$sic_section)
-        pal        <- rep(dbt_palettes$dbt$extended,
-                          length.out = length(sic_levels))
-        colour_vec <- pal[ match(df$sic_section, sic_levels) ]
-
-        marker_cfg <- list(
-          colors = colour_vec,
-          line   = list(width = 1.5, color = "#ffffff")
+        textinfo_map <- c(
+          both  = "label+value+percent parent",
+          label = "label",
+          value = "value+percent parent"
         )
-      } else {
-        v_norm <- (df$value - min(df$value)) / (max(df$value) - min(df$value) + 1e-9)
-        seq_pal <- grDevices::colorRampPalette(
-          c("#b0c9e1", "#4174a3", "#00285f")
-        )(100)
-        colour_vec <- seq_pal[ pmax(1L, ceiling(v_norm * 100)) ]
+        textinfo_val <- textinfo_map[[ input$label_mode %||% "both" ]]
 
-        marker_cfg <- list(
-          colors = colour_vec,
-          line   = list(width = 1.5, color = "#ffffff")
+        colour_by <- input$colour_by %||% "sic_section"
+
+        if (colour_by == "sic_section") {
+          sic_levels <- unique(df$sic_section)
+          pal        <- rep(dbt_palettes$dbt$extended,
+                            length.out = length(sic_levels))
+          colour_vec <- pal[ match(df$sic_section, sic_levels) ]
+
+          marker_cfg <- list(
+            colors = colour_vec,
+            line   = list(width = 1.5, color = "#ffffff")
+          )
+        } else {
+          v_norm <- (df$value - min(df$value)) / (max(df$value) - min(df$value) + 1e-9)
+          seq_pal <- grDevices::colorRampPalette(
+            c("#b0c9e1", "#4174a3", "#00285f")
+          )(100)
+          colour_vec <- seq_pal[ pmax(1L, ceiling(v_norm * 100)) ]
+
+          marker_cfg <- list(
+            colors = colour_vec,
+            line   = list(width = 1.5, color = "#ffffff")
+          )
+        }
+
+        plotly::plot_ly(
+          data       = df,
+          type       = "treemap",
+          labels     = ~industry,
+          parents    = ~"",
+          values     = ~value,
+          textinfo   = textinfo_val,
+          hovertemplate = paste0(
+            "<b>%{label}</b><br>",
+            "SIC section: ", df$sic_section, "<br>",
+            "Jobs (000s): %{value:,.1f}<br>",
+            "Share: %{percentParent:.1%}<extra></extra>"
+          ),
+          marker     = marker_cfg,
+          textfont   = list(family = "GDS Transport, Arial, sans-serif", size = 11)
+        ) %>%
+          plotly::layout(
+            title = list(
+              text = paste0("<b>Workforce Jobs by Industry</b><br>",
+                            "<sup>Snapshot: ", snap_lbl, " \u2014 values in 000s</sup>"),
+              font = list(family = "GDS Transport, Arial, sans-serif",
+                          size = 14, color = "#0b0c0c"),
+              x = 0, xanchor = "left"
+            ),
+            margin    = list(t = 60, l = 0, r = 0, b = 0),
+            paper_bgcolor = "#ffffff",
+            font      = list(family = "GDS Transport, Arial, sans-serif")
+          ) %>%
+          plotly::config(
+            displayModeBar = TRUE,
+            modeBarButtonsToRemove = c("lasso2d", "select2d"),
+            toImageButtonOptions  = list(
+              format   = "svg",
+              filename = paste0("workforce_jobs_", snap_lbl)
+            )
+          )
+      } else {
+        df <- filtered_long_df(); req(nrow(df) > 0)
+        dbt_ts_plot(
+          df          = df,
+          chart_type  = ct,
+          bar_interval = input$stack_mode %||% "annually",
+          bar_agg     = "last",
+          x_title     = "Time period (YYYY\u2011MM)",
+          y_title     = "Workforce jobs (000s)",
+          palette     = dbt_palettes$gaf,
+          initial_legend_mode = "hidden",
+          group_col   = "sic_section",
+          time_col    = "time_period",
+          value_col   = "value",
+          vlines = date_lines$values_out(), vline_labels = date_lines$labels_out(),
+          hlines = value_lines$values_out(), hline_labels = value_lines$labels_out()
         )
       }
-
-      plotly::plot_ly(
-        data       = df,
-        type       = "treemap",
-        labels     = ~industry,
-        parents    = ~"",
-        values     = ~value,
-        textinfo   = textinfo_val,
-        hovertemplate = paste0(
-          "<b>%{label}</b><br>",
-          "SIC section: ", df$sic_section, "<br>",
-          "Jobs (000s): %{value:,.1f}<br>",
-          "Share: %{percentParent:.1%}<extra></extra>"
-        ),
-        marker     = marker_cfg,
-        textfont   = list(family = "GDS Transport, Arial, sans-serif", size = 11)
-      ) %>%
-        plotly::layout(
-          title = list(
-            text = paste0("<b>Workforce Jobs by Industry</b><br>",
-                          "<sup>Snapshot: ", snap_lbl, " \u2014 values in 000s</sup>"),
-            font = list(family = "GDS Transport, Arial, sans-serif",
-                        size = 14, color = "#0b0c0c"),
-            x = 0, xanchor = "left"
-          ),
-          margin    = list(t = 60, l = 0, r = 0, b = 0),
-          paper_bgcolor = "#ffffff",
-          font      = list(family = "GDS Transport, Arial, sans-serif")
-        ) %>%
-        plotly::config(
-          displayModeBar = TRUE,
-          modeBarButtonsToRemove = c("lasso2d", "select2d"),
-          toImageButtonOptions  = list(
-            format   = "svg",
-            filename = paste0("workforce_jobs_", snap_lbl)
-          )
-        )
     })
   })
 }
