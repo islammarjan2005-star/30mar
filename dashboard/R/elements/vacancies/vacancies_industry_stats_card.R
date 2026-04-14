@@ -231,7 +231,7 @@ vacancies_industry_stats_card_server <- function(id, conn = APP_DB$pool) {
         good_if_increase = TRUE,
         format_headline  = govuk_format_number,
         show_info  = TRUE,
-        info_text  = "Aggregate of all service industry sections (SIC G-S) (000s). Displayed separately as it overlaps with individual section breakdowns below.",
+        info_text  = "Aggregate of all service industry sections (SIC G-S) (000s).",
         info_icon  = "i"
       )
     })
