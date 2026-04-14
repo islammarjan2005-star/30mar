@@ -1,7 +1,7 @@
 ### WORKFORCE JOBS BY INDUSTRY BLOCK  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## WORKFORCE JOBS UI ## -----
-employment_workforce_industry_ui <- function(id) {
+employment_workforce_industry_stats_card_ui <- function(id) {
   ns <- NS(id)
   tags$script("$(function() {$('[data-toggle=\"tooltip\"]').tooltip();});")
 
@@ -101,7 +101,7 @@ employment_workforce_industry_ui <- function(id) {
 }
 
 ## WORKFORCE JOBS SERVER ## -----
-employment_workforce_industry_server <- function(id, conn = APP_DB$pool) {
+employment_workforce_industry_stats_card_server <- function(id, conn = APP_DB$pool) {
   moduleServer(id, function(input, output, session) {
 
     AGG_CODES <- c("A-T", "G-T")

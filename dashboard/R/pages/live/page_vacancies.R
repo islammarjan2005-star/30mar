@@ -29,7 +29,7 @@ vacancies_ui <- function(id) {
                   div(class = "govuk-grid-row",
                     div(class = "govuk-grid-column-full",
                     tags$section(id = "section-vacancies-industry",
-                    vacancies_industry_ui(ns("vacancies_industry_card"))
+                    vacancies_industry_stats_card_ui(ns("vacancies_industry_card"))
                     )))
         ))
   )
@@ -37,6 +37,6 @@ vacancies_ui <- function(id) {
 
 vacancies_server <- function(id) {
   moduleServer(id, function(input, output, session) {
-    vacancies_industry_server("vacancies_industry_card")
+    vacancies_industry_stats_card_server("vacancies_industry_card")
   })
 }

@@ -59,7 +59,7 @@ employment_ui <- function(id) {
                   div(class = "govuk-grid-row",
                     div(class = "govuk-grid-column-full",
                     tags$section(id = "section-workforce-industry",
-                    employment_workforce_industry_ui(ns("workforce_industry_card"))
+                    employment_workforce_industry_stats_card_ui(ns("workforce_industry_card"))
                     )))
 )))
 }
@@ -76,7 +76,7 @@ employment_server <- function(id) {
     employment_awe_stats_card_server("awe_card")
     employment_ftpt_stats_card_server("ftpt_card")
     employment_age_stats_card_server("age_trend_card")
-    employment_workforce_industry_server("workforce_industry_card")
+    employment_workforce_industry_stats_card_server("workforce_industry_card")
 
   })
 }

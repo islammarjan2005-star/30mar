@@ -1,7 +1,7 @@
 ### VACANCIES BY INDUSTRY BLOCK  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ## VACANCIES BY INDUSTRY UI ## -----
-vacancies_industry_ui <- function(id) {
+vacancies_industry_stats_card_ui <- function(id) {
   ns <- NS(id)
   tags$script("$(function() {$('[data-toggle=\"tooltip\"]').tooltip();});")
 
@@ -101,7 +101,7 @@ vacancies_industry_ui <- function(id) {
 }
 
 ## VACANCIES BY INDUSTRY SERVER ## -----
-vacancies_industry_server <- function(id, conn = APP_DB$pool) {
+vacancies_industry_stats_card_server <- function(id, conn = APP_DB$pool) {
   moduleServer(id, function(input, output, session) {
 
     AGG_CODES <- c("B-S", "G-S")
