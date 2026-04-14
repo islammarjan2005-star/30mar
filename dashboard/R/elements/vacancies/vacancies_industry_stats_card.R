@@ -16,7 +16,7 @@ vacancies_industry_stats_card_ui <- function(id) {
     mod_govuk_data_vis_card_ui(
       id = ns("vacancies_industry_card"),
       title = "Vacancies by Industry",
-      help_text = "Vacancies by SIC section. Treemap shows a snapshot of the latest period in the selected range; line/area/bar modes show trends across all periods in range, grouped by SIC section. Aggregate totals (B-S all vacancies, G-S total services) are excluded from the chart and shown above as stat cards.",
+      help_text = "Vacancies by SIC section",
       help_text_source = "Source: ONS - Labour market statistics, vacancies by industry",
       help_link = "https://data.trade.gov.uk/datasets/4609dc12-0dfa-4734-8ecb-6c50b59d163d",
       help_link_text = "ONS Labour Market Overview",

@@ -16,7 +16,7 @@ employment_workforce_industry_stats_card_ui <- function(id) {
     mod_govuk_data_vis_card_ui(
       id = ns("workforce_industry_card"),
       title = "Workforce Jobs by Industry",
-      help_text = "Workforce jobs by SIC section. Treemap shows a snapshot of the latest period in the selected range; line/area/bar modes show trends across all periods in range, grouped by SIC section. Aggregate totals (A-T, G-T) are excluded from the chart and shown above as stat cards.",
+      help_text = "Workforce jobs by SIC section",
       help_text_source = "Source: ONS - Labour market statistics, workforce jobs by industry",
       help_link = "https://data.trade.gov.uk/datasets/4609dc12-0dfa-4734-8ecb-6c50b59d163d",
       help_link_text = "ONS Labour Market Overview",
@@ -30,11 +30,9 @@ employment_workforce_industry_stats_card_ui <- function(id) {
           label   = "Choose a graph :",
           choiceNames = list(
             tags$span(`data-toggle`="tooltip", title = "Treemap (snapshot)", tags$i(class = "fa fa-th-large")),
-            tags$span(`data-toggle`="tooltip", title = "Stacked Bar Chart", tags$i(class = "fa fa-bar-chart")),
-            tags$span(`data-toggle`="tooltip", title = "Line Chart",        tags$i(class = "fa fa-line-chart")),
-            tags$span(`data-toggle`="tooltip", title = "Area Chart",        tags$i(class = "fa fa-area-chart"))
+            tags$span(`data-toggle`="tooltip", title = "Stacked Bar Chart", tags$i(class = "fa fa-bar-chart"))
           ),
-          choiceValues = c("treemap","stacked_bar","line","stacked_area"),
+          choiceValues = c("treemap","stacked_bar"),
           justified = TRUE,
           size = "sm",
           status = "danger"
@@ -353,11 +351,17 @@ employment_workforce_industry_stats_card_server <- function(id, conn = APP_DB$po
 ## WORKFORCE JOBS DATA ## ------
 
 # Workforce jobs table: ons.labour_market__workforce_jobs
+# time_period like "Jun 24 (p)" — strip "(p)" suffix then parse as Mon YY.
 get_workforce_jobs_tbl <- function() {
   base <- dplyr::tbl(APP_DB$pool,
                      dbplyr::in_schema("ons", "labour_market__workforce_jobs"))
 
-  period_sql <- .date_sql_for("MMM YY (p)", "time_period")
+  period_sql <- dbplyr::sql("
+    to_date(
+      initcap(btrim(regexp_replace(time_period::text, '\\\\s*\\\\(p\\\\)\\\\s*$', '', 'i'))),
+      'Mon YY'
+    )::date
+  ")
 
   base %>%
     dplyr::mutate(time_period = !!period_sql) %>%
